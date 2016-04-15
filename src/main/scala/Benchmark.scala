@@ -3,9 +3,11 @@ import com.datastax.spark.connector._
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{SaveMode, DataFrame, SQLContext}
+import org.apache.spark.sql.cassandra.CassandraSQLContext
 
 import sys.process._
+import language.postfixOps
 
 object Benchmark {
   type OptionMap = Map[Symbol, Any]
@@ -19,8 +21,10 @@ object Benchmark {
                  .set("spark.cassandra.connection.host", options('cassandraHost).asInstanceOf[String])
 
     val sc = new SparkContext(conf)
+    val sqlContext = new SQLContext(sc)
     try {
-      new Run(options).run(sc)
+      for (schema <- options('schemas).asInstanceOf[Seq[Schema]])
+        new Run(options, schema).run(sc, sqlContext)
     }
     finally {
       sc.stop()
@@ -33,12 +37,14 @@ object Benchmark {
       "\t--spark-master local[4]\n" +
       "\t--hdfs-host hdfs://localhost:9000\n" +
       "\t--hdfs-path /user\n" +
-      "\t--schema 1\n" +
+      "\t--schemas 1,3\n" +
       "\t--num-records 100000\n" +
       "\t--num-clusterings 100\n" +
       "\t--key-length 25\n" +
       "\t--flush-os-cache\n" +
-      "WARNING: only flush the OS cache in test environments!!!"
+      "WARNING: only flush the OS cache in test environments!!!\n" +
+      "To select the schemas to test pass a number between 1 and 4 " +
+      "or a command separated list of numbers between 1 and 4"
 
     val arglist = args.toList
 
@@ -53,8 +59,8 @@ object Benchmark {
           nextOption(map - 'hdfsHost ++ Map('hdfsHost -> value.toString), tail)
         case "--hdfs-path" :: value :: tail =>
           nextOption(map - 'hdfsPath ++ Map('hdfsPath -> value.toString), tail)
-        case "--schema" :: value :: tail =>
-          nextOption(map - 'schema ++ Map('schema -> Schema.create(value.toInt)), tail)
+        case "--schemas" :: value :: tail =>
+          nextOption(map - 'schemas ++ Map('schemas -> value.split(',').map(n => Schema.create(n.trim.toInt))), tail)
         case "--num-records" :: value :: tail =>
           nextOption(map - 'numRecords ++ Map('numRecords -> value.toInt), tail)
         case "--num-clusterings" :: value :: tail =>
@@ -74,8 +80,8 @@ object Benchmark {
                                  'sparkMaster -> "local[4]",
                                  'hdfsHost -> "hdfs://localhost:9000",
                                  'hdfsPath -> "/user",
-                                 'schema -> Schema.create(1),
-                                 'numRecords -> 100000,
+                                 'schemas -> Seq(Schema.create(1), Schema.create(3)),
+                                 'numRecords -> 1000,
                                  'numClusterings -> 100,
                                  'keyLength -> 25,
                                  'flushOSCache -> false),
@@ -85,61 +91,73 @@ object Benchmark {
   }
 
   @SerialVersionUID(100L)
-  class Run(options: OptionMap) extends Serializable {
+  class Run(options: OptionMap, schema: Schema) extends Serializable {
     val hdfsHost = options('hdfsHost).asInstanceOf[String]
     val csvFile = hdfsHost + options('hdfsPath).asInstanceOf[String] + "/benchmark.csv"
     val parquetFile = hdfsHost + options('hdfsPath).asInstanceOf[String] + "/benchmark.parquet"
     val numRecords = options('numRecords).asInstanceOf[Int]
-    val schema = options('schema).asInstanceOf[Schema]
     val flushOSCache = options('flushOSCache).asInstanceOf[Boolean]
     val numClusterings = options('numClusterings).asInstanceOf[Int]
     val keyLength = options('keyLength).asInstanceOf[Int]
 
-    def run( sc: SparkContext): Unit = {
-      val sql = new SQLContext(sc)
+    def run( sc: SparkContext, sqlContext: SQLContext): Unit = {
+      println(s"Testing $schema...")
+
       generateSchema(sc)
       clearHDFSData()
 
-      time(loadData(sql))
+      loadData(sqlContext)
 
-      time(testParquet(sql))
-      maybeFlushOSCache(sc)
+      val parquetRDD = test(testParquet_RDD(sqlContext), sc)
+      val parquetDF = test(testParquet_DF(sqlContext), sc)
 
-      time(testCSV(sc))
-      maybeFlushOSCache(sc)
+      val csvRDD = test(testCSV_RDD(sc), sc)
+      val csvDF = test(testCSV_DF(sqlContext), sc)
 
-      time(testCassandra(sc))
-      maybeFlushOSCache(sc)
+      val cassandraRDD = test(testCassandra_RDD(sc), sc)
+      val cassandraDF = test(testCassandra_DF(sc), sc)
+
+      println("Test         |       Count|      Result|      Time")
+      println("Parquet RDD  |%12d|%12d|%f".format(parquetRDD._1, parquetRDD._2, parquetRDD._3));
+      println("Parquet DF   |%12d|%12d|%f".format(parquetDF._1, parquetDF._2, parquetDF._3));
+      println("Csv RDD      |%12d|%12d|%f".format(csvRDD._1, csvRDD._2, csvRDD._3));
+      println("Csv DF       |%12d|%12d|%f".format(csvDF._1, csvDF._2, csvDF._3));
+      println("Cassandra RDD|%12d|%12d|%f".format(cassandraRDD._1, cassandraRDD._2, cassandraRDD._3));
+      println("Cassandra DF |%12d|%12d|%f".format(cassandraDF._1, cassandraDF._2, cassandraDF._3));
     }
 
     def generateSchema(sc: SparkContext) = {
-      println("**** Generating schema...")
       schema.asInstanceOf[Schema].create(sc.getConf)
     }
 
-    def loadData(sql: SQLContext) = {
-
-      val sc = sql.sparkContext
+    def loadData(sqlContext: SQLContext) = {
+      val s = System.nanoTime
+      val sc = sqlContext.sparkContext
       val numPartitions = sc.defaultParallelism
       val recordsPerPartition = numRecords / numPartitions
 
       val collection = sc.parallelize(Seq[Int](), numPartitions)
                          .mapPartitions { _ => {
-                           println(s"**** Generating $recordsPerPartition rows...")
                            schema.generateRows(recordsPerPartition, numClusterings, keyLength).iterator
                          }}.cache()
 
-      collection.saveToCassandra(schema.keyspace, schema.table, schema.columns())
-      collection.saveAsTextFile(csvFile)
-
-      val df = sql.createDataFrame(collection)
+      val df = schema.createDataFrame(sqlContext, collection)
       df.write.parquet(parquetFile)
 
-      "Data generation"
+      df.write.format("org.apache.spark.sql.cassandra")
+              .options(Map( "table" -> schema.table, "keyspace" -> schema.keyspace))
+              .mode(SaveMode.Append)
+              .save()
+
+      df.write.format("com.databricks.spark.csv")
+              .option("header", "false")
+              .save(csvFile)
+
+      val time = (System.nanoTime - s) / 1e9
+      println(s"Data loading took $time seconds")
     }
 
     def clearHDFSData() = {
-      println("**** Clearing HDFS data...")
       val hadoopConf = new org.apache.hadoop.conf.Configuration()
       val hdfs = org.apache.hadoop.fs.FileSystem.get(new java.net.URI(hdfsHost), hadoopConf)
 
@@ -147,11 +165,16 @@ object Benchmark {
       hdfs.delete(new org.apache.hadoop.fs.Path(parquetFile), true)
     }
 
-    def time[A](f: => A) = {
+    def test[A, B](f: => (A, B), sc: SparkContext) = {
+      val ret = time(f)
+      maybeFlushOSCache(sc)
+      ret
+    }
+
+    def time[A, B](f: => (A, B)) = {
       val s = System.nanoTime
-      val testName = f
-      val time = (System.nanoTime - s) / 1e9
-      println(s"**** Total time for $testName: $time s")
+      val ret = f
+      (ret._1, ret._2, (System.nanoTime - s) / 1e9)
     }
 
     def maybeFlushOSCache(sc: SparkContext): Unit = {
@@ -167,23 +190,47 @@ object Benchmark {
       empty.foreach(_ => ()) //just to make sure the RDD is created so the action in mapPartitions() is done
     }
 
-    def testCassandra(sc: SparkContext) = {
-      processRdd(sc.cassandraTable(schema.keyspace, schema.table).map(r => schema.fromCassandra(r)), "Cassandra")
+    def testCassandra_RDD(sc: SparkContext) = {
+      processRdd(sc.cassandraTable(schema.keyspace, schema.table).map(r => schema.fromCassandra(r)))
     }
 
-    def testParquet(sql: SQLContext) = {
-      processRdd(sql.read.parquet(parquetFile).rdd.map(r => schema.fromParquet(r)), "HDFS Parquet")
+    def testCassandra_DF(sc: SparkContext) = {
+      val cc = new CassandraSQLContext(sc)
+      val cols = schema.getSelectColumns.mkString(",")
+      val table = schema.keyspace + "." + schema.table
+      processDataFrame(cc.sql(s"SELECT $cols FROM $table"))
     }
 
-    def testCSV(sc: SparkContext) = {
-      processRdd(sc.textFile(csvFile).map(s => schema.fromString(s)), "HDFS csv")
+    def testParquet_RDD(sql: SQLContext) = {
+      processRdd(sql.read.parquet(parquetFile).rdd.map(r => schema.fromParquet(r)))
     }
 
-    def processRdd(rdd: RDD[Row], testName: String) = {
-      val total = rdd.count()
-      val result = rdd.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b)
-      println(s"**** $testName - max of $total is $result")
-      testName
+    def testParquet_DF(sqlContext: SQLContext) = {
+      val cols = schema.getSelectColumns.mkString(",")
+      processDataFrame(sqlContext.sql(s"SELECT $cols FROM parquet.`$parquetFile`"))
+    }
+
+    def testCSV_RDD(sc: SparkContext) = {
+      processRdd(sc.textFile(csvFile).map(s => schema.fromString(s)))
+    }
+
+    def testCSV_DF(sqlContext: SQLContext) = {
+      val df = sqlContext.read
+        .format("com.databricks.spark.csv")
+        .option("header", "false")
+        .schema(schema.getCSVSchema)
+        .load(csvFile)
+
+      val columns = schema.getSelectColumns
+      processDataFrame(df.select(columns(0), columns.drop(1):_*))
+    }
+
+    def processRdd(rdd: RDD[ResultRow]) = {
+      (rdd.count(), rdd.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b))
+    }
+
+    def processDataFrame(df: DataFrame) = {
+      (df.count(), df.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b))
     }
   }
 }
