@@ -9,7 +9,8 @@ local_ip=`hostname -I | xargs`
 echo "Master IP ${master_ip}, Local IP ${local_ip}"
 echo "All addresses: ${addresses[@]}"
 
-wget http://apache.01link.hk/hadoop/common/hadoop-2.6.4/hadoop-2.6.4.tar.gz
+wget http://apache.communilink.net/hadoop/common/hadoop-2.6.4/hadoop-2.6.4.tar.gz
+
 tar -xvf hadoop-2.6.4.tar.gz
 
 cd hadoop-2.6.4

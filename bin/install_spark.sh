@@ -1,13 +1,14 @@
 #!/bin/bash
 
-master_ip=$1
-slave_ips=$2
+export IFS=","
+read -r -a addresses <<< "$1"
+
+master_ip=${addresses[0]}
 local_ip=`hostname -I | xargs` 
 
 echo "Master IP ${master_ip}, Local IP ${local_ip}"
-echo "Slaves: ${slave_ips}"
+echo "All addresses: ${addresses[@]}"
 
-# http://spark.apache.org/docs/latest/spark-standalone.html
 wget http://apache.communilink.net/spark/spark-1.6.1/spark-1.6.1-bin-hadoop2.6.tgz
 tar -xvf spark-1.6.1-bin-hadoop2.6.tgz && rm spark-1.6.1-bin-hadoop2.6.tgz
 
@@ -19,10 +20,15 @@ fi
 
 echo "Configuring spark for master host"
 
-echo "${master_ip}" > spark-1.6.1-bin-hadoop2.6/conf/slaves
-export IFS=","
-for ip in ${slave_ips}; do
-  echo "$ip" >> spark-1.6.1-bin-hadoop2.6/conf/slaves
+slaves_file=spark-1.6.1-bin-hadoop2.6/conf/slaves
+
+if [ -f ${slaves_file} ];
+then
+    rm ${slaves_file}
+fi
+
+for ip in "${addresses[@]}"; do
+  echo "$ip" >> ${slaves_file}
 done
 
 cat >spark-1.6.1-bin-hadoop2.6/conf/spark-env.sh <<EOL
