@@ -53,6 +53,9 @@ c run ste 0 "git clone https://github.com/stef1927/spark-load-perf.git"
 c run ste 0 "mkdir spark-load-perf/lib"
 c scp ste 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0-M2.jar /home/automaton/spark-load-perf/lib
 
+# Install some monitoring utilities
+c run all 'sudo apt-get -y install dstat htop'
+
 #Build
 #c run ste 0 "cd spark-load-perf && sbt assembly"
 

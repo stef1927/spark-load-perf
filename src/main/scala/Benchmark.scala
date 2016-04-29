@@ -47,7 +47,8 @@ object Benchmark {
       "\t--num-repetitions 1\n" +
       "\t--flush-os-cache\n" +
       "\t--compact\n" +
-      "WARNING: only flush the OS cache in test environments!!!\n" +
+      "\t--workers localhost\n" +
+       "WARNING: only flush the OS cache in test environments!!!\n" +
       "To select the schemas to test pass a number between 1 and 4 " +
       "or a command separated list of numbers between 1 and 4"
 
@@ -78,6 +79,8 @@ object Benchmark {
           nextOption(map - 'flushOSCache ++ Map('flushOSCache -> true), tail)
         case "--compact" :: tail =>
           nextOption(map - 'compact ++ Map('compact -> true), tail)
+        case "--workers" :: value :: tail =>
+          nextOption(map - 'workers ++ Map('workers -> value.split(',').toSeq), tail)
         case option :: tail =>
           println("Unknown option " + option)
           println(usage)
@@ -95,7 +98,8 @@ object Benchmark {
                                  'generatePartitions -> 100,
                                  'flushOSCache -> false,
                                  'numRepetitions -> 1,
-                                 'compact -> false),
+                                 'compact -> false,
+                                 'workers -> Seq("localhost")),
                              arglist)
     println(options)
     options
@@ -113,6 +117,7 @@ object Benchmark {
     val generatePartitions = options('generatePartitions).asInstanceOf[Int]
     val numRepetitions = options('numRepetitions).asInstanceOf[Int]
     val compact = options('compact).asInstanceOf[Boolean]
+    val workers = options('workers).asInstanceOf[Seq[String]]
 
     val seed = System.nanoTime();
     println(s"Using seed $seed")
@@ -124,6 +129,9 @@ object Benchmark {
       setUp(sc, sqlContext)
 
       type ResultMap = Map[String, Seq[(Long, Long, Double)]]
+
+      println("Warming up...")
+      testCassandra_RDD(sqlContext)
 
       val tests = mutable.LinkedHashMap(
         "parquet_rdd" -> testParquet_RDD _,
@@ -183,7 +191,7 @@ object Benchmark {
 
       loadData(sqlContext)
 
-      maybeCompactCassandraTables()
+      maybeCompactCassandraTables(sc)
       maybeFlushOSCache(sc)
     }
 
@@ -225,18 +233,20 @@ object Benchmark {
       println(s"Data loading took $time seconds")
     }
 
-    def maybeCompactCassandraTables() {
+    def maybeCompactCassandraTables(sc: SparkContext) {
       if (!compact)
         return
 
       val ks = schema.keyspace
       val table = schema.table
 
-      println("Flushing Cassandra tables...")
-      println(s"nodetool flush $ks $table" !)
+      workers.par.map(worker => {
+        println(s"Flushing Cassandra tables on $worker...")
+        println(s"ssh $worker ~/cassandra-src/bin/nodetool flush $ks $table" !)
 
-      println("Compacting Cassandra tables...")
-      println(s"nodetool compact $ks $table" !)
+        println(s"Compacting Cassandra tables on $worker...")
+        println(s"ssh $worker ~/cassandra-src/bin/nodetool compact $ks $table" !)
+      })
 
     }
 
@@ -244,13 +254,13 @@ object Benchmark {
       if (!flushOSCache)
         return
 
-      val empty = sc.parallelize(Seq[Int]()).mapPartitions { _ => {
-        println("Flushing OS cache...")
-        println("free && sync && echo 3 | sudo tee /proc/sys/vm/drop_caches && free" !!)
-        Seq[Int]().iterator
-      }}
+      workers.par.map(worker => {
+        s"ssh $worker sync && echo 3 | sudo tee /proc/sys/vm/drop_caches > /dev/null" !
 
-      empty.foreach(_ => ()) //just to make sure the RDD is created so the action in mapPartitions() is done
+        s"ssh $worker ~/cassandra-src/bin/nodetool invalidatekeycache" !
+
+        s"ssh $worker ~/cassandra-src/bin/nodetool invalidaterowcache" !
+      })
     }
 
     def test[A, B](testName: String, f: SQLContext => (A, B), sqlContext: SQLContext) = {
