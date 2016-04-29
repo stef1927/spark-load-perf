@@ -285,11 +285,20 @@ object Benchmark {
 
     def _testCassandra_RDD(sqlContext: SQLContext, stream: Boolean) = {
       val sc = sqlContext.sparkContext
-      val rdd = sc.cassandraTable(schema.keyspace, schema.table)
       val conf = sc.getConf
       conf.set("spark.cassandra.input.stream", stream.toString)
-      processRdd(rdd.withReadConf(ReadConf.fromSparkConf(conf))
-                    .map(r => schema.fromCassandra(r)))
+
+      schema.num match {
+        case 1 | 2 =>
+          processRdd(sc.cassandraTable[ValuesRow](schema.keyspace, schema.table)
+                       .withReadConf(ReadConf.fromSparkConf(conf))
+                       .map(r => ResultRow(r.val2, r.val3)))
+        case 3 | 4 =>
+          processRdd(sc.cassandraTable[BlobRow](schema.keyspace, schema.table)
+            .withReadConf(ReadConf.fromSparkConf(conf))
+            .map(r => r.data.split(BlobRow.sep))
+            .map(s => ResultRow(s(1).trim.toInt, s(2).trim.toInt)))
+      }
     }
 
     def _testCassandra_DF(sqlContext: SQLContext, stream: Boolean) = {

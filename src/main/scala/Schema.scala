@@ -67,7 +67,7 @@ object BlobRow {
 case class ResultRow(val2: Int, val3: Int)
 
 @SerialVersionUID(100L)
-class Schema(name: String, num: Int) extends Serializable {
+class Schema(val name: String, val num: Int) extends Serializable {
   val table = name
   val keyspace = "ks"
 
