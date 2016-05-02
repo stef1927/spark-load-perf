@@ -35,6 +35,6 @@ cat >spark-1.6.1-bin-hadoop2.6/conf/spark-env.sh <<EOL
 SPARK_MASTER_IP=$master_ip
 SPARK_LOCAL_IP=$master_ip
 SPARK_PUBLIC_DNS=$master_ip
-#SPARK_WORKER_CORES=8
+SPARK_EXECUTOR_CORES=4
 EOL
 
