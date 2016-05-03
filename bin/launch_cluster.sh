@@ -52,7 +52,7 @@ c run ste 0 "sudo apt-get -y install sbt"
 c run ste 0 "git clone https://github.com/stef1927/spark-load-perf.git"
 c run ste 0 "mkdir spark-load-perf/lib"
 c scp ste 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0-M2.jar /home/automaton/spark-load-perf/lib
-c scp ste all ${ROOT_PATH}/profile-advanced.jfc /home/automaton
+c scp ste all ${ROOT_PATH}/profiling-advanced.jfc /home/automaton
 
 # Install some monitoring utilities
 c run all 'sudo apt-get -y install dstat htop'
@@ -82,4 +82,5 @@ echo ../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master sp
 #$SPARK_HOME/bin/spark-submit --class Benchmark --master local[4] target/scala-2.10/spark-load-perf-assembly-1.0.jar --num-records 100000 --schemas 1| tee results.txt
 
 # Sample launch command for profiling locally with JFR
-#$SPARK_HOME/bin/spark-submit --class Benchmark --master local[4] --conf "spark.driver.extraJavaOptions=-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -XX:StartFlightRecording=delay=45s -XX:FlightRecorderOptions=defaultrecording=true,dumponexit=true,dumponexitpath=benchmark.jfr,settings=./profile-advanced.jfc" target/scala-2.10/spark-load-perf-assembly-1.0.jar --num-records 2000000 --schemas 1 --num-repetitions 3 | tee results.txt
+#$SPARK_HOME/bin/spark-submit --class Benchmark --master local[4] --conf "spark.driver.extraJavaOptions=-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints" target/scala-2.10/spark-load-perf-assembly-1.0.jar --num-records 2500000 --schemas 1 --split-size-mb 16 --num-repetitions 3 | tee results.txt
+# Then use:jcmd PID JFR.start settings=/home/stefi/profiling-advanced.jfc filename=benchmark2.jfr dumponexit=true
