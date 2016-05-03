@@ -55,10 +55,15 @@ The following command line arguments are supported:
 * `--num-records 100000` - the total number of rows to generate
 * `--num-timestamps 100` - the number of timestamps per primary partition keys
 * `--key-length 25` - the length of the primary partition key
-* `--num-generate-partitions 100` - the number of parallel jobs used to generate data, higher number of records require higher parallelism or OOM errors may be thrown (current limitation)
+* `--num-generate-partitions 10` - the number of parallel jobs used to generate data
+* `--split-size-mb 64` - the size of each C* RDD partition in MB
 * `--num-repetitions 1` - the number of times each test is repeated
 * `--flush-os-cache` - when specified,  the OS cache will be flushed via `sync && echo 3 | sudo tee /proc/sys/vm/drop_caches`
 * `--compact` - when specified, Cassandra tables will be flushed and compacted before starting the tests.
+
+Use split-size-mb and num-generate-partitions to ensure the number of C* and HDFS RDD tasks is the same or comparable: num-generate-partitions 
+controls the number of HDFS blocks created and hence the HDFS partitions, split-size-mb should be reduced to increase C* RDD partitions, increasing
+the number of records increases the datasize and therefore the C* partitions as well.
 
 ## Creating a distributed cluster
 

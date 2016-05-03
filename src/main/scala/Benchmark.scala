@@ -21,7 +21,7 @@ object Benchmark {
     val conf = new SparkConf()
                  .setAppName("spark-load-test")
                  .set("spark.cassandra.connection.host", options('cassandraHost).asInstanceOf[String])
-                 //.set("spark.cassandra.input.split.size_in_mb", "32")
+                 .set("spark.cassandra.input.split.size_in_mb", options('splitSize).asInstanceOf[String])
 
     val sc = new SparkContext(conf)
     val sqlContext = new SQLContext(sc)
@@ -43,7 +43,8 @@ object Benchmark {
       "\t--num-records 100000\n" +
       "\t--num-timestamps 100\n" +
       "\t--key-length 25\n" +
-      "\t--num-generate-partitions 100\n" +
+      "\t--num-generate-partitions 10\n" +
+      "\t--split-size-mb 64\n" +
       "\t--num-repetitions 1\n" +
       "\t--flush-os-cache\n" +
       "\t--compact\n" +
@@ -73,6 +74,8 @@ object Benchmark {
           nextOption(map - 'keyLength ++ Map('keyLength -> value.toInt), tail)
         case "--num-generate-partitions" :: value :: tail =>
           nextOption(map - 'generatePartitions ++ Map('generatePartitions -> value.toInt), tail)
+        case "--split-size-mb" :: value :: tail =>
+          nextOption(map - 'splitSize ++ Map('splitSize -> value.toString), tail)
         case "--num-repetitions" :: value :: tail =>
           nextOption(map - 'numRepetitions ++ Map('numRepetitions -> value.toInt), tail)
         case "--flush-os-cache" :: tail =>
@@ -95,7 +98,8 @@ object Benchmark {
                                  'numRecords -> 1000,
                                  'numTimestamps -> 100,
                                  'keyLength -> 25,
-                                 'generatePartitions -> 100,
+                                 'generatePartitions -> 10,
+                                 'splitSize -> "64",
                                  'flushOSCache -> false,
                                  'numRepetitions -> 1,
                                  'compact -> false,

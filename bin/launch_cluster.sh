@@ -60,12 +60,15 @@ c run all 'sudo apt-get -y install dstat htop'
 #Build
 c run ste 0 "cd spark-load-perf && sbt assembly"
 
-# Sample launch command:
-# ../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 --flush-os-cache --compact --num-generate-partitions 1000 --num-repetitions 3 --schemas 1 | tee results.txt
+echo "Sample launch command"
+echo ../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+     target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 \
+     --flush-os-cache --compact --workers $hosts --num-repetitions 3 --schemas 1 | tee results.txt
 
-# Sample lauch command with JFR:
-#../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 --conf "spark.executor.extraJavaOptions=-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -XX:FlightRecorderOptions=settings=/home/automaton/profile-advanced.jfc,loglevel=debug" target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 --flush-os-cache --compact --num-generate-partitions 1000 --num-repetitions 3 --schemas 1 | tee results.txt
-#Use jcmd on the spark executors to start and stop recording
+# To launch with JFR add
+#--conf "spark.executor.extraJavaOptions=-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -XX:FlightRecorderOptions=settings=/home/automaton/profile-advanced.jfc,loglevel=debug"
+#after the --master option then
+#use jcmd on the spark executors to start and stop recording:
 #alias jcmd='/usr/lib/jvm/jdk1.8.0_40/bin/jcmd'
 #jcmd <= will show the spark executors
 #jcmd PID JFR.start
@@ -73,6 +76,7 @@ c run ste 0 "cd spark-load-perf && sbt assembly"
 
 #To record JFR files for cassandra:
 #export JVM_OPTS="-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -XX:FlightRecorderOptions=settings=/home/automaton/profile-advanced.jfc,loglevel=debug"
+#and restart, then use jcmd to start and stop recording
 
 # Sample launch command for testing locally:
 #$SPARK_HOME/bin/spark-submit --class Benchmark --master local[4] target/scala-2.10/spark-load-perf-assembly-1.0.jar --num-records 100000 --schemas 1| tee results.txt

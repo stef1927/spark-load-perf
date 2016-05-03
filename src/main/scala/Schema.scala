@@ -107,7 +107,7 @@ class Schema(val name: String, val num: Int) extends Serializable {
 
   def generateRows(numRecords: Int, numClusterings: Int, keyLength: Int) = {
     val numPartitions = numRecords / numClusterings
-    val ret = (1 to numPartitions).map(_ => randomString(keyLength))
+    val ret = (1 to numPartitions).view.map(_ => randomString(keyLength))
                            .flatMap(id => (1 to numClusterings).map(_ => randomRow(id)))
 
     val left = numRecords % numClusterings
