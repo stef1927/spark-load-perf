@@ -21,7 +21,9 @@ object Benchmark {
     val conf = new SparkConf()
                  .setAppName("spark-load-test")
                  .set("spark.cassandra.connection.host", options('cassandraHost).asInstanceOf[String])
+                 .set("spark.cassandra.input.metrics", "false")
                  .set("spark.cassandra.input.split.size_in_mb", options('splitSize).asInstanceOf[String])
+
 
     val sc = new SparkContext(conf)
     val sqlContext = new SQLContext(sc)
@@ -134,9 +136,6 @@ object Benchmark {
 
       type ResultMap = Map[String, Seq[(Long, Long, Double)]]
 
-      println("Warming up...")
-      testCassandra_RDD(sqlContext)
-
       val tests = mutable.LinkedHashMap(
         "parquet_rdd" -> testParquet_RDD _,
         "parquet_df" -> testParquet_DF _,
@@ -144,6 +143,8 @@ object Benchmark {
         "csv_df" -> testCSV_DF _,
         "cassandra_rdd" -> testCassandra_RDD _,
         "cassandra_rdd_stream" -> testCassandra_RDD_stream _,
+        "cassandra_rdd_rows" -> testCassandra_RDD_rows _,
+        "cassandra_rdd_rows_stream" -> testCassandra_RDD_rows_stream _,
         "cassandra_df" -> testCassandra_DF _,
         "cassandra_df_stream" -> testCassandra_DF_stream _
       )
@@ -160,10 +161,10 @@ object Benchmark {
         println(s"Repetitions nr. $rep")
         val results = nextTest(Map(), Random.shuffle(testNames))
 
-        println("                Test|       Count|      Result|      Time")
+        println("                     Test|       Count|      Result|      Time")
         for (test <- testNames) {
           val result = results(test)
-          println("%20s|%12d|%12d|%f".format(test, result(0)._1, result(0)._2, result(0)._3));
+          println("%25s|%12d|%12d|%f".format(test, result(0)._1, result(0)._2, result(0)._3));
         }
 
         results
@@ -178,14 +179,14 @@ object Benchmark {
       println("# Averages: #")
       println("#############")
 
-      println("                Test|        Time|    Std. Dev")
+      println("                     Test|        Time|    Std. Dev")
       for (test <- testNames) {
         val times = results.getOrElse(test, Seq((0L, 0L, 0.))).map(r => r._3)
         val count = times.length
         val mean = times.sum / count
         val devs = times.map(t => (t - mean) * (t - mean))
         val stddev = Math.sqrt(devs.sum / count)
-        println("%20s|%12f|%12f".format(test, mean, stddev));
+        println("%25s|%12f|%12f".format(test, mean, stddev));
       }
     }
 
@@ -285,18 +286,17 @@ object Benchmark {
       _testCassandra_RDD(sqlContext, false)
     }
 
-    def testCassandra_DF(sqlContext: SQLContext) = {
-      _testCassandra_DF(sqlContext, false)
-    }
 
     def testCassandra_RDD_stream(sqlContext: SQLContext) = {
       _testCassandra_RDD(sqlContext, true)
     }
 
-    def testCassandra_DF_stream(sqlContext: SQLContext) = {
-      _testCassandra_DF(sqlContext, true)
-    }
-
+    /**
+      * Test a Cassandra RDDs using Case Classes.
+      * @param sqlContext the Spark SQL context
+      * @param stream indicates if we should use streaming
+      * @return
+      */
     def _testCassandra_RDD(sqlContext: SQLContext, stream: Boolean) = {
       val sc = sqlContext.sparkContext
       val conf = sc.getConf
@@ -315,6 +315,45 @@ object Benchmark {
       }
     }
 
+    def testCassandra_RDD_rows(sqlContext: SQLContext) = {
+      _testCassandra_RDD_rows(sqlContext, false)
+    }
+
+    def testCassandra_RDD_rows_stream(sqlContext: SQLContext) = {
+      _testCassandra_RDD_rows(sqlContext, true)
+    }
+
+    /**
+      * Test a Cassandra RDDs using CassandraRow rather than case classes.
+      * @param sqlContext the Spark SQL context
+      * @param stream indicates if we should use streaming
+      * @return
+      */
+    def _testCassandra_RDD_rows(sqlContext: SQLContext, stream: Boolean) = {
+      val sc = sqlContext.sparkContext
+      val conf = sc.getConf
+      conf.set("spark.cassandra.input.stream", stream.toString)
+
+      processRdd(sc.cassandraTable(schema.keyspace, schema.table)
+                   .withReadConf(ReadConf.fromSparkConf(conf))
+                   .map(r => schema.fromCassandra(r)))
+    }
+
+    def testCassandra_DF(sqlContext: SQLContext) = {
+      _testCassandra_DF(sqlContext, false)
+    }
+
+    def testCassandra_DF_stream(sqlContext: SQLContext) = {
+      _testCassandra_DF(sqlContext, true)
+    }
+
+    /**
+      * Test a Cassandra data frames (DFs). Note that we also push the predicate
+      * to the server so this test will only decode 2 rows, rather than the full table.
+      * @param sqlContext the Spark SQL context
+      * @param stream indicates if we should use streaming
+      * @return
+      */
     def _testCassandra_DF(sqlContext: SQLContext, stream: Boolean) = {
       val sc = sqlContext.sparkContext
       val cc = new CassandraSQLContext(sc)
@@ -350,6 +389,7 @@ object Benchmark {
     }
 
     def processRdd(rdd: RDD[ResultRow]): (Long, Long) = {
+      //rdd.take(10).foreach(r => println(s"Line: $r"))
       (rdd.count(), rdd.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b))
     }
 

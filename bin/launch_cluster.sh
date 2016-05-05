@@ -50,32 +50,39 @@ c run ste 0 "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 6
 c run ste 0 "sudo apt-get -y update"
 c run ste 0 "sudo apt-get -y install sbt"
 c run ste 0 "git clone https://github.com/stef1927/spark-load-perf.git"
-c run ste 0 "mkdir spark-load-perf/lib"
+c run ste 0 "mkdir spark-load-perf/lib && mkdir spark-load-perf/lib-pre-optim"
+c scp ste 0 ${ROOT_PATH}/lib-pre-optim/spark-cassandra-connector-assembly-1.6.0-M2.jar /home/automaton/spark-load-perf/lib-pre-optim
 c scp ste 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0-M2.jar /home/automaton/spark-load-perf/lib
 c scp ste all ${ROOT_PATH}/profiling-advanced.jfc /home/automaton
 
 # Install some monitoring utilities
-c run all 'sudo apt-get -y install dstat htop'
+c run ste all 'sudo apt-get -y install dstat htop'
 
 #Build
 c run ste 0 "cd spark-load-perf && sbt assembly"
 
 echo "Sample launch command"
-echo ../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
      target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 \
-     --flush-os-cache --compact --workers $hosts --num-repetitions 3 --schemas 1 | tee results.txt
+     --flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 32 --num-repetitions 5 --schemas 1 | tee results.txt"
 
-# To launch with JFR add
-#--conf "spark.executor.extraJavaOptions=-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -XX:FlightRecorderOptions=settings=/home/automaton/profile-advanced.jfc,loglevel=debug"
-#after the --master option then
-#use jcmd on the spark executors to start and stop recording:
+set +xv #echo off
+
+# Schema 1 parameters to ensure 30-40 partitions:
+# --num-generate-partitions 30 --split-size-mb 32 --num-repetitions 5 --schemas 1
+
+# Schema 3 parameters to ensure 30-40 partitions:
+# --num-generate-partitions 30 --split-size-mb 64 --num-repetitions 5 --schemas 3
+
+
+# To launch with JFR add use jcmd on the spark executors (the JVM options are set in spark-defaults.conf):
 #alias jcmd='/usr/lib/jvm/jdk1.8.0_40/bin/jcmd'
 #jcmd <= will show the spark executors
-#jcmd PID JFR.start
+#jcmd PID JFR.start settings=/home/automaton/profiling-advanced.jfc filename=benchmark.jfr dumponexit=true
 #jcmd PID JFR.dump recording=1 filename=/home/automaton/benchmark.jfr
 
 #To record JFR files for cassandra:
-#export JVM_OPTS="-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -XX:FlightRecorderOptions=settings=/home/automaton/profile-advanced.jfc,loglevel=debug"
+#export JVM_OPTS="-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints"
 #and restart, then use jcmd to start and stop recording
 
 # Sample launch command for testing locally:
@@ -83,4 +90,4 @@ echo ../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master sp
 
 # Sample launch command for profiling locally with JFR
 #$SPARK_HOME/bin/spark-submit --class Benchmark --master local[4] --conf "spark.driver.extraJavaOptions=-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints" target/scala-2.10/spark-load-perf-assembly-1.0.jar --num-records 2500000 --schemas 1 --split-size-mb 16 --num-repetitions 3 | tee results.txt
-# Then use:jcmd PID JFR.start settings=/home/stefi/profiling-advanced.jfc filename=benchmark2.jfr dumponexit=true
+# Then use:jcmd PID JFR.start settings=/home/stefi/profiling-advanced.jfc filename=benchmark.jfr dumponexit=true
