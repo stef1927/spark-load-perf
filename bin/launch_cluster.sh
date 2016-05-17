@@ -12,7 +12,7 @@ c launch -i n1-standard-8 ste 5
 
 # Install and Start Cassandra
 #c install -i source --branch-name=trunk --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
-c install -i source --branch-name=9259 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
+c install -i source --branch-name=11521 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
 c start -s ste cassandra
 c run ste 0 'nodetool status'
 

@@ -143,8 +143,8 @@ object Benchmark {
         "csv_df" -> testCSV_DF _,
         "cassandra_rdd" -> testCassandra_RDD _,
         "cassandra_rdd_stream" -> testCassandra_RDD_stream _,
-        "cassandra_rdd_rows" -> testCassandra_RDD_rows _,
-        "cassandra_rdd_rows_stream" -> testCassandra_RDD_rows_stream _,
+        //"cassandra_rdd_rows" -> testCassandra_RDD_rows _,
+        //"cassandra_rdd_rows_stream" -> testCassandra_RDD_rows_stream _,
         "cassandra_df" -> testCassandra_DF _,
         "cassandra_df_stream" -> testCassandra_DF_stream _
       )
