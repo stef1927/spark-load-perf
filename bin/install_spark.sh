@@ -37,7 +37,7 @@ SPARK_LOCAL_IP=$master_ip
 SPARK_PUBLIC_DNS=$master_ip
 EOL
 
-cat conf/spark-defaults.conf <<EOL
+cat >conf/spark-defaults.conf <<EOL
 spark.executor.memory              4g
 spark.executor.extraJavaOptions    -XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints 
 EOL

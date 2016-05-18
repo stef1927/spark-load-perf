@@ -12,6 +12,7 @@ c launch -i n1-standard-8 ste 5
 
 # Install and Start Cassandra
 #c install -i source --branch-name=trunk --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
+#c install -i source --branch-name=9259 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
 c install -i source --branch-name=11521 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
 c start -s ste cassandra
 c run ste 0 'nodetool status'
@@ -50,8 +51,7 @@ c run ste 0 "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 6
 c run ste 0 "sudo apt-get -y update"
 c run ste 0 "sudo apt-get -y install sbt"
 c run ste 0 "git clone https://github.com/stef1927/spark-load-perf.git"
-c run ste 0 "mkdir spark-load-perf/lib && mkdir spark-load-perf/lib-pre-optim"
-c scp ste 0 ${ROOT_PATH}/lib-pre-optim/spark-cassandra-connector-assembly-1.6.0-M2.jar /home/automaton/spark-load-perf/lib-pre-optim
+c run ste 0 "mkdir spark-load-perf/lib"
 c scp ste 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0-M2.jar /home/automaton/spark-load-perf/lib
 c scp ste all ${ROOT_PATH}/profiling-advanced.jfc /home/automaton
 
@@ -61,12 +61,19 @@ c run ste all 'sudo apt-get -y install dstat htop'
 #Build
 c run ste 0 "cd spark-load-perf && sbt assembly"
 
-echo "Sample launch command"
-echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
-     target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 \
-     --flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 32 --num-repetitions 5 --schemas 1 | tee results.txt"
-
 set +xv #echo off
+
+echo "Sample launch command for schema 1:"
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 32 --num-repetitions 10 --schemas 1 | tee results.1.txt"
+
+echo "Sample launch command for schema 3:"
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 64 --num-repetitions 10 --schemas 3 | tee results.3.txt"
+
+
 
 # Schema 1 parameters to ensure 30-40 partitions:
 # --num-generate-partitions 30 --split-size-mb 32 --num-repetitions 5 --schemas 1

@@ -251,6 +251,9 @@ object Benchmark {
 
         println(s"Compacting Cassandra tables on $worker...")
         println(s"ssh $worker ~/cassandra-src/bin/nodetool compact $ks $table" !)
+
+        println(s"Refreshing size estimates on $worker...")
+        println(s"ssh $worker ~/cassandra-src/bin/nodetool refreshsizeestimates" !)
       })
 
     }
