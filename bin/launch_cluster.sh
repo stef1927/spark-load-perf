@@ -40,10 +40,10 @@ c run ste 0 'spark-1.6.1-bin-hadoop2.6/sbin/start-all.sh'
 
 # Monitoring
 # ssh port forwarding:
-# c ssh ste 0 -- -L 8080:localhost:8080 -L 50070:localhost:50070 -L 9000:localhost:9000 -L 7077:localhost:7077 -L 9042:localhost:9042
+# c ssh ste 0 -- -L 8080:localhost:8080 -L 4040:localhost:4040 -L 50070:localhost:50070 -L 9000:localhost:9000 -L 7077:localhost:7077 -L 9042:localhost:9042
 # To check which ports are open: "sudo netstap -tulpn | grep LISTEN"
 # Monitor the status of the HDFS cluster via the name node Web API: http://name_node_host:50070/ (must forward port via SSH or use public IP)
-# Monitor the status of the Spark cluster via the master Web API: http://spark_master_host:8080/ (must forward port via SSH or use public IP)
+# Monitor the status of the Spark cluster via the master Web API: http://spark_master_host:8080/ and :4040(must forward port via SSH or use public IP)
 
 # Running the client on the master host
 c run ste 0 'echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list'
@@ -52,7 +52,7 @@ c run ste 0 "sudo apt-get -y update"
 c run ste 0 "sudo apt-get -y install sbt"
 c run ste 0 "git clone https://github.com/stef1927/spark-load-perf.git"
 c run ste 0 "mkdir spark-load-perf/lib"
-c scp ste 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0-M2.jar /home/automaton/spark-load-perf/lib
+c scp ste 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0.jar /home/automaton/spark-load-perf/lib
 c scp ste all ${ROOT_PATH}/profiling-advanced.jfc /home/automaton
 
 # Install some monitoring utilities
@@ -85,7 +85,8 @@ target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2
 # To launch with JFR add use jcmd on the spark executors (the JVM options are set in spark-defaults.conf):
 #alias jcmd='/usr/lib/jvm/jdk1.8.0_40/bin/jcmd'
 #jcmd <= will show the spark executors
-#jcmd PID JFR.start settings=/home/automaton/profiling-advanced.jfc filename=benchmark.jfr dumponexit=true
+#jcmd PID JFR.start settings=/home/automaton/profiling-advanced.jfc filename=/home/automaton/benchmark.jfr dumponexit=true
+#For some reason must also call this, dumponexit doesn't seem to work:
 #jcmd PID JFR.dump recording=1 filename=/home/automaton/benchmark.jfr
 
 #To record JFR files for cassandra:
