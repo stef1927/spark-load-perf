@@ -51,6 +51,7 @@ object Benchmark {
       "\t--flush-os-cache\n" +
       "\t--compact\n" +
       "\t--workers localhost\n" +
+      "\t--max-pages-second 0\n" +
        "WARNING: only flush the OS cache in test environments!!!\n" +
       "To select the schemas to test pass a number between 1 and 4 " +
       "or a command separated list of numbers between 1 and 4"
@@ -86,6 +87,8 @@ object Benchmark {
           nextOption(map - 'compact ++ Map('compact -> true), tail)
         case "--workers" :: value :: tail =>
           nextOption(map - 'workers ++ Map('workers -> value.split(',').toSeq), tail)
+        case "--max-pages-second" :: value :: tail =>
+          nextOption(map - 'maxPagesSecond ++ Map('maxPagesSecond -> value.toInt), tail)
         case option :: tail =>
           println("Unknown option " + option)
           println(usage)
@@ -105,7 +108,8 @@ object Benchmark {
                                  'flushOSCache -> false,
                                  'numRepetitions -> 1,
                                  'compact -> false,
-                                 'workers -> Seq("localhost")),
+                                 'workers -> Seq("localhost"),
+                                 'maxPagesSecond -> 0),
                              arglist)
     println(options)
     options
@@ -124,6 +128,7 @@ object Benchmark {
     val numRepetitions = options('numRepetitions).asInstanceOf[Int]
     val compact = options('compact).asInstanceOf[Boolean]
     val workers = options('workers).asInstanceOf[Seq[String]]
+    val maxPagesSecond = options('maxPagesSecond).asInstanceOf[Int]
 
     val seed = System.nanoTime();
     println(s"Using seed $seed")
@@ -304,7 +309,8 @@ object Benchmark {
     def _testCassandra_RDD(sqlContext: SQLContext, asyncPaging: Boolean) = {
       val sc = sqlContext.sparkContext
       val conf = sc.getConf
-      conf.set("spark.cassandra.input.async.paging", asyncPaging.toString)
+      conf.set("spark.cassandra.input.async.paging.enabled", asyncPaging.toString)
+      conf.set("spark.cassandra.input.async.paging.max_pages_second", maxPagesSecond.toString)
 
       schema.num match {
         case 1 | 2 =>
@@ -337,7 +343,8 @@ object Benchmark {
     def _testCassandra_RDD_rows(sqlContext: SQLContext, asyncPaging: Boolean) = {
       val sc = sqlContext.sparkContext
       val conf = sc.getConf
-      conf.set("spark.cassandra.input.async.paging", asyncPaging.toString)
+      conf.set("spark.cassandra.input.async.paging.enabled", asyncPaging.toString)
+      conf.set("spark.cassandra.input.async.paging.max_pages_second", maxPagesSecond.toString)
 
       processRdd(sc.cassandraTable(schema.keyspace, schema.table)
                    .withReadConf(ReadConf.fromSparkConf(conf))
@@ -363,7 +370,8 @@ object Benchmark {
     def _testCassandra_DF(sqlContext: SQLContext, asyncPaging: Boolean) = {
       val sc = sqlContext.sparkContext
       val cc = new CassandraSQLContext(sc)
-      cc.setConf(Map("spark.cassandra.input.async.paging" -> asyncPaging.toString))
+      cc.setConf(Map("spark.cassandra.input.async.paging.enabled" -> asyncPaging.toString,
+                     "spark.cassandra.input.async.paging.max_pages_second" -> maxPagesSecond.toString))
       val cols = schema.getSelectColumns.mkString(",")
       val table = schema.keyspace + "." + schema.table
       processDataFrame(cc.sql(s"SELECT $cols FROM $table"))
