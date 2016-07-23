@@ -99,3 +99,25 @@ target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2
 # Sample launch command for profiling locally with JFR
 #$SPARK_HOME/bin/spark-submit --class Benchmark --master local[4] --conf "spark.driver.extraJavaOptions=-XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints" target/scala-2.10/spark-load-perf-assembly-1.0.jar --num-records 2500000 --schemas 1 --split-size-mb 16 --num-repetitions 3 | tee results.txt
 # Then use:jcmd PID JFR.start settings=/home/stefi/profiling-advanced.jfc filename=benchmark.jfr dumponexit=true
+
+
+# To launch jstatd (to connect visual vm remotely):
+
+# First use the following script:
+
+# launch_jstatd.sh 
+# #!/bin/sh
+# policy=${HOME}/.jstatd.all.policy
+# [ -r ${policy} ] || cat >${policy} <<'POLICY'
+# grant codebase "file:${java.home}/../lib/tools.jar" {
+# permission java.security.AllPermission;
+# };
+# POLICY
+
+# jstatd -J-Djava.security.policy=${policy} &
+
+# then find the two ports (1099 and a random one):
+# sudo netstat -tulpn | grep jstatd
+
+# then tunnel these two ports and 7199 (the c* JMX port) over ssh:
+# c ssh ste 0 -- -L 7199:localhost:7199 -L 1099:localhost:1099 -L 46709:localhost:46709 

@@ -139,7 +139,7 @@ object Benchmark {
 
       setUp(sc, sqlContext)
 
-      type ResultMap = Map[String, Seq[(Long, Long, Double)]]
+      type ResultMap = Map[String, Seq[(Long, Int, Double)]]
 
       val tests = mutable.LinkedHashMap(
         "parquet_rdd" -> testParquet_RDD _,
@@ -148,8 +148,6 @@ object Benchmark {
         "csv_df" -> testCSV_DF _,
         "cassandra_rdd" -> testCassandra_RDD _,
         "cassandra_rdd_async" -> testCassandra_RDD_async _,
-        //"cassandra_rdd_rows" -> testCassandra_RDD_rows _,
-        //"cassandra_rdd_rows_async" -> testCassandra_RDD_rows_async _,
         "cassandra_df" -> testCassandra_DF _,
         "cassandra_df_async" -> testCassandra_DF_async _
       )
@@ -241,6 +239,8 @@ object Benchmark {
 
       val time = (System.nanoTime - s) / 1e9
       println(s"Data loading took $time seconds")
+
+      df.unpersist(true)
     }
 
     def maybeCompactCassandraTables(sc: SparkContext) {
@@ -325,31 +325,31 @@ object Benchmark {
       }
     }
 
-    def testCassandra_RDD_rows(sqlContext: SQLContext) = {
-      _testCassandra_RDD_rows(sqlContext, false)
-    }
-
-    def testCassandra_RDD_rows_async(sqlContext: SQLContext) = {
-      _testCassandra_RDD_rows(sqlContext, true)
-    }
-
-    /**
-      * Test a Cassandra RDDs using CassandraRow rather than case classes.
-      *
-      * @param sqlContext the Spark SQL context
-      * @param asyncPaging indicates if we should use asynchronous paging
-      * @return
-      */
-    def _testCassandra_RDD_rows(sqlContext: SQLContext, asyncPaging: Boolean) = {
-      val sc = sqlContext.sparkContext
-      val conf = sc.getConf
-      conf.set("spark.cassandra.input.async.paging.enabled", asyncPaging.toString)
-      conf.set("spark.cassandra.input.async.paging.max_pages_second", maxPagesSecond.toString)
-
-      processRdd(sc.cassandraTable(schema.keyspace, schema.table)
-                   .withReadConf(ReadConf.fromSparkConf(conf))
-                   .map(r => schema.fromCassandra(r)))
-    }
+//    def testCassandra_RDD_rows(sqlContext: SQLContext) = {
+//      _testCassandra_RDD_rows(sqlContext, false)
+//    }
+//
+//    def testCassandra_RDD_rows_async(sqlContext: SQLContext) = {
+//      _testCassandra_RDD_rows(sqlContext, true)
+//    }
+//
+//    /**
+//      * Test a Cassandra RDDs using CassandraRow rather than case classes.
+//      *
+//      * @param sqlContext the Spark SQL context
+//      * @param asyncPaging indicates if we should use asynchronous paging
+//      * @return
+//      */
+//    def _testCassandra_RDD_rows(sqlContext: SQLContext, asyncPaging: Boolean) = {
+//      val sc = sqlContext.sparkContext
+//      val conf = sc.getConf
+//      conf.set("spark.cassandra.input.async.paging.enabled", asyncPaging.toString)
+//      conf.set("spark.cassandra.input.async.paging.max_pages_second", maxPagesSecond.toString)
+//
+//      processRdd(sc.cassandraTable(schema.keyspace, schema.table)
+//                   .withReadConf(ReadConf.fromSparkConf(conf))
+//                   .map(r => schema.fromCassandra(r)))
+//    }
 
     def testCassandra_DF(sqlContext: SQLContext) = {
       _testCassandra_DF(sqlContext, false)
@@ -402,13 +402,16 @@ object Benchmark {
       processDataFrame(df.select(columns(0), columns.drop(1):_*))
     }
 
-    def processRdd(rdd: RDD[ResultRow]): (Long, Long) = {
-      //rdd.take(10).foreach(r => println(s"Line: $r"))
-      (rdd.count(), rdd.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b))
+    def processRdd(rdd: RDD[ResultRow]): (Long, Int) = {
+      val ret = (rdd.count(), rdd.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b))
+      rdd.unpersist(false)
+      ret
     }
 
-    def processDataFrame(df: DataFrame): (Long, Long) = {
-      (df.count(), df.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b))
+    def processDataFrame(df: DataFrame): (Long, Int) = {
+      val ret = (df.count(), df.map(row => schema.max(row)).reduce((a, b) => if (a > b) a else b))
+      df.unpersist(false)
+      ret
     }
   }
 }

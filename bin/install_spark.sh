@@ -6,6 +6,8 @@ read -r -a addresses <<< "$1"
 master_ip=${addresses[0]}
 local_ip=`hostname -I | xargs` 
 
+public_ip=`curl "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip" -H "Metadata-Flavor: Google" | xargs` 
+
 echo "Master IP ${master_ip}, Local IP ${local_ip}"
 echo "All addresses: ${addresses[@]}"
 
@@ -39,6 +41,7 @@ EOL
 
 cat >spark-1.6.1-bin-hadoop2.6/conf/spark-defaults.conf <<EOL
 spark.executor.memory              4g
-spark.executor.extraJavaOptions    -XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints 
+spark.executor.extraJavaOptions    -XX:+UnlockCommercialFeatures -XX:+FlightRecorder -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8090 -Dcom.sun.management.jmxremote.rmi.port=8091 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=$public_ip
+
 EOL
 
