@@ -6,72 +6,98 @@ source ~/.bash_aliases
 set -xv #echo on
 
 ROOT_PATH=/home/stefi/git/cstar/benchmarks/spark-load-perf
+CLUSTER_NAME=ste
 
 # Create the cluster
-c launch -i n1-standard-8 ste 5
+c launch -i n1-standard-8 ${CLUSTER_NAME} 5
 
 # Install and Start Cassandra
-#c install -i source --branch-name=trunk --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
-#c install -i source --branch-name=9259 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
-c install -i source --branch-name=11521 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ste cassandra
-c start -s ste cassandra
-c run ste 0 'nodetool status'
+c install -i source --branch-name=11521 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 256 -s 5 ${CLUSTER_NAME} cassandra
+#c install -i source --branch-name=11521 --cass-git-repo=https://github.com/stef1927/cassandra.git -s 5 ${CLUSTER_NAME} cassandra
+#c install -i source --branch-name=11521 --cass-git-repo=https://github.com/stef1927/cassandra.git -n 32 -s 5 ${CLUSTER_NAME} cassandra
+
+c start -s ${CLUSTER_NAME} cassandra
+c run ${CLUSTER_NAME} 0 'nodetool status'
 
 # Extract cluster private ip addresses
-hosts=`c info ste | grep "private hostname" | cut -d' ' -f 3 | tr '\n' ','`
+hosts=`c info ${CLUSTER_NAME} | grep "private hostname" | cut -d' ' -f 3 | tr '\n' ','`
 echo ${hosts}
 
 
 # Install and Start HDFS
 # https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-common/ClusterSetup.html
-c scp ste all ${ROOT_PATH}/bin/install_hdfs.sh /home/automaton/install_hdfs.sh
-c run ste all "chmod +x install_hdfs.sh && ./install_hdfs.sh ${hosts}"
-c run ste all "sed -i'' -e 's/\${JAVA_HOME}/\/usr\/lib\/jvm\/jdk1.8.0_40/' ~/hadoop-2.6.4/etc/hadoop/hadoop-env.sh"
-c run ste 0 './hadoop-2.6.4/bin/hdfs namenode -format ste_hdfs'
-c run ste 0 './hadoop-2.6.4/sbin/start-dfs.sh'
-c run ste 0 './hadoop-2.6.4/bin/hdfs dfs -mkdir /user'
+c scp ${CLUSTER_NAME} all ${ROOT_PATH}/bin/install_hdfs.sh /home/automaton/install_hdfs.sh
+c run ${CLUSTER_NAME} all "chmod +x install_hdfs.sh && ./install_hdfs.sh ${hosts}"
+c run ${CLUSTER_NAME} all "sed -i'' -e 's/\${JAVA_HOME}/\/usr\/lib\/jvm\/jdk1.8.0_40/' ~/hadoop-2.6.4/etc/hadoop/hadoop-env.sh"
+c run ${CLUSTER_NAME} 0 './hadoop-2.6.4/bin/hdfs namenode -format ste_hdfs'
+c run ${CLUSTER_NAME} 0 './hadoop-2.6.4/sbin/start-dfs.sh'
+c run ${CLUSTER_NAME} 0 './hadoop-2.6.4/bin/hdfs dfs -mkdir /user'
 
 # Install and Start Spark
 # http://spark.apache.org/docs/latest/spark-standalone.html
-c scp ste all ${ROOT_PATH}/bin/install_spark.sh /home/automaton/install_spark.sh
-c run ste all "chmod +x install_spark.sh && ./install_spark.sh ${hosts}"
-c run ste 0 'spark-1.6.1-bin-hadoop2.6/sbin/start-all.sh'
+c scp ${CLUSTER_NAME} all ${ROOT_PATH}/bin/install_spark.sh /home/automaton/install_spark.sh
+c run ${CLUSTER_NAME} all "chmod +x install_spark.sh && ./install_spark.sh ${hosts}"
+c run ${CLUSTER_NAME} 0 'spark-1.6.1-bin-hadoop2.6/sbin/start-all.sh'
 
 
 # Monitoring
 # ssh port forwarding:
-# c ssh ste 0 -- -L 8080:localhost:8080 -L 4040:localhost:4040 -L 50070:localhost:50070 -L 9000:localhost:9000 -L 7077:localhost:7077 -L 9042:localhost:9042
+# c ssh ${CLUSTER_NAME} 0 -- -L 8080:localhost:8080 -L 4040:localhost:4040 -L 50070:localhost:50070 -L 9000:localhost:9000 -L 7077:localhost:7077 -L 9042:localhost:9042
 # To check which ports are open: "sudo netstap -tulpn | grep LISTEN"
 # Monitor the status of the HDFS cluster via the name node Web API: http://name_node_host:50070/ (must forward port via SSH or use public IP)
 # Monitor the status of the Spark cluster via the master Web API: http://spark_master_host:8080/ and :4040(must forward port via SSH or use public IP)
 
 # Running the client on the master host
-c run ste 0 'echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list'
-c run ste 0 "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 642AC823"
-c run ste 0 "sudo apt-get -y update"
-c run ste 0 "sudo apt-get -y install sbt"
-c run ste 0 "git clone https://github.com/stef1927/spark-load-perf.git"
-c run ste 0 "mkdir spark-load-perf/lib"
-c scp ste 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0.jar /home/automaton/spark-load-perf/lib
-c scp ste all ${ROOT_PATH}/profiling-advanced.jfc /home/automaton
+c run ${CLUSTER_NAME} 0 'echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list'
+c run ${CLUSTER_NAME} 0 "sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 642AC823"
+c run ${CLUSTER_NAME} 0 "sudo apt-get -y update"
+c run ${CLUSTER_NAME} 0 "sudo apt-get -y install sbt"
+c run ${CLUSTER_NAME} 0 "git clone https://github.com/stef1927/spark-load-perf.git"
+c run ${CLUSTER_NAME} 0 "mkdir spark-load-perf/lib"
+c scp ${CLUSTER_NAME} 0 ${ROOT_PATH}/lib/spark-cassandra-connector-assembly-1.6.0.jar /home/automaton/spark-load-perf/lib
+c scp ${CLUSTER_NAME} all ${ROOT_PATH}/profiling-advanced.jfc /home/automaton
 
 # Install some monitoring utilities
-c run ste all 'sudo apt-get -y install dstat htop'
+c run ${CLUSTER_NAME} all 'sudo apt-get -y install dstat htop'
 
 #Build
-c run ste 0 "cd spark-load-perf && sbt assembly"
+c run ${CLUSTER_NAME} 0 "cd spark-load-perf && sbt assembly"
 
 set +xv #echo off
 
-echo "Sample launch command for schema 1:"
+echo "Sample launch commands for schema 1:"
 echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
 target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 \
---flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 32 --num-repetitions 10 --schemas 1 | tee results.1.txt"
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 32 --num-repetitions 6 --schemas 1 | tee results.1.15M.txt"
 
-echo "Sample launch command for schema 3:"
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 30000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 64 --num-repetitions 6 --schemas 1 | tee results.1.30M.txt"
+
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 60000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 128 --num-repetitions 6 --schemas 1 | tee results.1.60M.txt"
+
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 120000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 60 --split-size-mb 128 --num-repetitions 4 --schemas 1 | tee results.1.120M.txt"
+
+echo "Sample launch commands for schema 3:"
 echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
 target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 15000000 \
---flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 64 --num-repetitions 10 --schemas 3 | tee results.3.txt"
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 64 --num-repetitions 6 --schemas 3 | tee results.3.15M.txt"
+
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 30000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 128 --num-repetitions 6 --schemas 3 | tee results.3.30M.txt"
+
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 60000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 30 --split-size-mb 256 --num-repetitions 6 --schemas 3 | tee results.3.60M.txt"
+
+echo "../spark-1.6.1-bin-hadoop2.6/bin/spark-submit --class Benchmark --master spark://10.240.0.2:7077 \
+target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2:9000 --num-records 120000000 \
+--flush-os-cache --compact --workers ${hosts} --num-generate-partitions 60 --split-size-mb 256 --num-repetitions 4 --schemas 3 | tee results.3.120M.txt"
 
 
 
@@ -101,23 +127,4 @@ target/scala-2.10/spark-load-perf-assembly-1.0.jar --hdfs-host hdfs://10.240.0.2
 # Then use:jcmd PID JFR.start settings=/home/stefi/profiling-advanced.jfc filename=benchmark.jfr dumponexit=true
 
 
-# To launch jstatd (to connect visual vm remotely):
-
-# First use the following script:
-
-# launch_jstatd.sh 
-# #!/bin/sh
-# policy=${HOME}/.jstatd.all.policy
-# [ -r ${policy} ] || cat >${policy} <<'POLICY'
-# grant codebase "file:${java.home}/../lib/tools.jar" {
-# permission java.security.AllPermission;
-# };
-# POLICY
-
-# jstatd -J-Djava.security.policy=${policy} &
-
-# then find the two ports (1099 and a random one):
-# sudo netstat -tulpn | grep jstatd
-
-# then tunnel these two ports and 7199 (the c* JMX port) over ssh:
-# c ssh ste 0 -- -L 7199:localhost:7199 -L 1099:localhost:1099 -L 46709:localhost:46709 
+#dstat -lvrn 10

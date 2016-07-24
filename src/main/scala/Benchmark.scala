@@ -184,7 +184,7 @@ object Benchmark {
 
       println("                     Test|        Time|    Std. Dev")
       for (test <- testNames) {
-        val times = results.getOrElse(test, Seq((0L, 0L, 0.))).map(r => r._3)
+        val times = results.getOrElse(test, Seq((0L, 0L, 0.))).drop(1).map(r => r._3)
         val count = times.length
         val mean = times.sum / count
         val devs = times.map(t => (t - mean) * (t - mean))
