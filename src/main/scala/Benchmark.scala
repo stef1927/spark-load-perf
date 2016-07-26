@@ -1,10 +1,9 @@
 import com.datastax.spark.connector._
 import com.datastax.spark.connector.rdd.ReadConf
-
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{SaveMode, DataFrame, SQLContext}
+import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import org.apache.spark.sql.cassandra.CassandraSQLContext
 
 import scala.collection.mutable
@@ -320,36 +319,9 @@ object Benchmark {
         case 3 | 4 =>
           processRdd(sc.cassandraTable[BlobRow](schema.keyspace, schema.table)
             .withReadConf(ReadConf.fromSparkConf(conf))
-            .map(r => r.data.split(BlobRow.sep))
-            .map(s => ResultRow(s(1).trim.toInt, s(2).trim.toInt)))
+            .map(r => schema.dataToResult( r.data)))
       }
     }
-
-//    def testCassandra_RDD_rows(sqlContext: SQLContext) = {
-//      _testCassandra_RDD_rows(sqlContext, false)
-//    }
-//
-//    def testCassandra_RDD_rows_async(sqlContext: SQLContext) = {
-//      _testCassandra_RDD_rows(sqlContext, true)
-//    }
-//
-//    /**
-//      * Test a Cassandra RDDs using CassandraRow rather than case classes.
-//      *
-//      * @param sqlContext the Spark SQL context
-//      * @param asyncPaging indicates if we should use asynchronous paging
-//      * @return
-//      */
-//    def _testCassandra_RDD_rows(sqlContext: SQLContext, asyncPaging: Boolean) = {
-//      val sc = sqlContext.sparkContext
-//      val conf = sc.getConf
-//      conf.set("spark.cassandra.input.async.paging.enabled", asyncPaging.toString)
-//      conf.set("spark.cassandra.input.async.paging.max_pages_second", maxPagesSecond.toString)
-//
-//      processRdd(sc.cassandraTable(schema.keyspace, schema.table)
-//                   .withReadConf(ReadConf.fromSparkConf(conf))
-//                   .map(r => schema.fromCassandra(r)))
-//    }
 
     def testCassandra_DF(sqlContext: SQLContext) = {
       _testCassandra_DF(sqlContext, false)

@@ -1,9 +1,11 @@
 import com.datastax.spark.connector.cql.CassandraConnector
+import com.google.common.base.Splitter
 import org.apache.spark.rdd.RDD
-
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.types._
+
+import scala.collection.JavaConversions._
 
 object Schema {
   def create(num: Int) = {
@@ -158,37 +160,47 @@ class Schema(val name: String, val num: Int) extends Serializable {
     case 1 | 2 =>
       ResultRow(row.getInt("val2"), row.getInt("val3"))
     case 3 | 4 =>
-      val s = row.getString("data").split(BlobRow.sep)
-      ResultRow(s(1).trim.toInt, s(2).trim.toInt)
+      dataToResult(row.getString("data"))
   }
 
   def fromParquet(row: org.apache.spark.sql.Row) = num match {
     case 1 | 2 =>
       ResultRow(row.getInt(3), row.getInt(4))
     case 3 | 4 =>
-      val s = row.getString(2).split(BlobRow.sep)
-      ResultRow(s(1).trim.toInt, s(2).trim.toInt)
+      dataToResult(row.getString(2))
   }
 
   def fromString(row: String) = {
-    val s = row.split(',')
+    val s = Splitter.on(',').split(row).toSeq
     num match {
       case 1 | 2 =>
         ResultRow(s(3).trim.toInt, s(4).trim.toInt)
       case 3| 4 =>
-        val fields = s(2).split(BlobRow.sep)
-        ResultRow(fields(1).trim.toInt, fields(2).trim.toInt)
+        dataToResult(s(2))
     }
+  }
+
+  /**
+    * Convert the data blob into a result row by extracting the second and third integers.
+    *
+    * @param data, the string to separate
+    *
+    * @return the second and third items, converted to an Integer
+    */
+  def dataToResult(data: String): ResultRow = {
+    val seq = Splitter.on(BlobRow.sep).split(data).slice(1, 3).map(s => s.trim.toInt).toSeq
+    ResultRow(seq(0), seq(1))
   }
 
   def max(row: ResultRow) = Math.max(row.val2, row.val3)
 
   def max(row: org.apache.spark.sql.Row) = num match {
     case 1 | 2 =>
-      Math.max(row.getInt(0), row.getInt(1))
+      val result = ResultRow(row.getInt(0), row.getInt(1))
+      Math.max(result.val2, result.val3)
     case 3 | 4 =>
-      val values = row.getString(0).split(BlobRow.sep)
-      Math.max(values(1).trim.toInt, values(2).trim.toInt)
+      val result = dataToResult(row.getString(0))
+      Math.max(result.val2, result.val3)
   }
 
   override def toString = s"$keyspace.$table"
