@@ -4,7 +4,8 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
-import org.apache.spark.sql.cassandra.CassandraSQLContext
+import org.apache.spark.sql.hive.HiveContext
+
 
 import scala.collection.mutable
 import scala.util.Random
@@ -341,9 +342,9 @@ object Benchmark {
       */
     def _testCassandra_DF(sqlContext: SQLContext, asyncPaging: Boolean) = {
       val sc = sqlContext.sparkContext
-      val cc = new CassandraSQLContext(sc)
-      cc.setConf(Map("spark.cassandra.input.async.paging.enabled" -> asyncPaging.toString,
-                     "spark.cassandra.input.async.paging.max_pages_second" -> maxPagesSecond.toString))
+      val cc = new HiveContext(sc)
+      cc.setConf("spark.cassandra.input.async.paging.enabled", asyncPaging.toString)
+      cc.setConf("spark.cassandra.input.async.paging.max_pages_second", maxPagesSecond.toString)
       val cols = schema.getSelectColumns.mkString(",")
       val table = schema.keyspace + "." + schema.table
       processDataFrame(cc.sql(s"SELECT $cols FROM $table"))
